@@ -140,7 +140,7 @@ function M.update(bufnr)
         local currency = unbalanced[1].currency
         local virt_text = "  " .. format_amount(inferred, currency)
         vim.api.nvim_buf_set_extmark(bufnr, virt_ns, missing[1].line, 0, {
-          virt_text = { { virt_text, "Comment" } },
+          virt_text = { { virt_text, "LedgerVirtText" } },
           virt_text_pos = "eol",
         })
       elseif #unbalanced > 1 then
@@ -179,7 +179,13 @@ function M.update(bufnr)
     ::continue::
   end
 
-  vim.diagnostic.set(diag_ns, bufnr, diagnostics, { virtual_text = true })
+  vim.diagnostic.set(diag_ns, bufnr, diagnostics, {})
+  for _, d in ipairs(diagnostics) do
+    vim.api.nvim_buf_set_extmark(bufnr, virt_ns, d.lnum, 0, {
+      virt_text     = { { "  " .. d.message, "LedgerVirtError" } },
+      virt_text_pos = "eol",
+    })
+  end
 end
 
 return M
