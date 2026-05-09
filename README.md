@@ -8,6 +8,8 @@ Neovim plugin for [hledger](https://hledger.org/) journal files.
 - **Balance diagnostics** — transactions that don't sum to zero are highlighted as errors
 - **Virtual text** — auto-balanced postings show the inferred amount as grey inline text
 
+![screenshot of ledger.nvim](https://github.com/user-attachments/assets/efa620da-ea0d-4c05-92bb-62c86f128be3)
+
 ## Requirements
 
 - Neovim 0.9+
