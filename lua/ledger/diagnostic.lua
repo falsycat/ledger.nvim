@@ -116,37 +116,61 @@ function M.update(bufnr)
       goto continue
     end
 
-    -- Sum amounts from postings that have one
-    -- Determine dominant currency
-    local sum = 0
-    local currency = nil
+    -- Sum amounts per currency
+    local sums = {}
     for _, p in ipairs(postings) do
       if p.amount ~= nil then
-        sum = sum + p.amount
-        if currency == nil then currency = p.currency end
+        local c = p.currency or ""
+        sums[c] = (sums[c] or 0) + p.amount
       end
     end
 
     if #missing == 1 then
-      -- Auto-balance: infer missing amount
-      local inferred = -sum
-      missing[1].amount = inferred
-      missing[1].currency = currency
-      -- Show virtual text
-      local virt_text = "  " .. format_amount(inferred, currency or "")
-      vim.api.nvim_buf_set_extmark(bufnr, virt_ns, missing[1].line, 0, {
-        virt_text = { { virt_text, "Comment" } },
-        virt_text_pos = "eol",
-      })
-    else
-      -- All postings have amounts — check balance
-      if math.abs(sum) > 1e-9 then
+      -- Collect which currencies are unbalanced
+      local unbalanced = {}
+      for c, s in pairs(sums) do
+        if math.abs(s) > 1e-9 then
+          table.insert(unbalanced, { currency = c, amount = s })
+        end
+      end
+
+      if #unbalanced == 1 then
+        -- Single currency: infer the missing amount and show virtual text
+        local inferred = -unbalanced[1].amount
+        local currency = unbalanced[1].currency
+        local virt_text = "  " .. format_amount(inferred, currency)
+        vim.api.nvim_buf_set_extmark(bufnr, virt_ns, missing[1].line, 0, {
+          virt_text = { { virt_text, "Comment" } },
+          virt_text_pos = "eol",
+        })
+      elseif #unbalanced > 1 then
+        -- Multiple currencies unbalanced: cannot infer a single missing amount
+        local parts = {}
+        for _, u in ipairs(unbalanced) do
+          table.insert(parts, format_amount(-u.amount, u.currency))
+        end
         table.insert(diagnostics, {
           lnum     = txn.date_line,
           col      = 0,
           severity = vim.diagnostic.severity.ERROR,
-          message  = string.format("Transaction does not balance (off by %s)",
-            format_amount(sum, currency or "")),
+          message  = "Cannot infer amount: multiple currencies unbalanced (" .. table.concat(parts, ", ") .. ")",
+          source   = "ledger",
+        })
+      end
+    else
+      -- All postings have amounts — check each currency sums to zero
+      local offby = {}
+      for c, s in pairs(sums) do
+        if math.abs(s) > 1e-9 then
+          table.insert(offby, format_amount(s, c))
+        end
+      end
+      if #offby > 0 then
+        table.insert(diagnostics, {
+          lnum     = txn.date_line,
+          col      = 0,
+          severity = vim.diagnostic.severity.ERROR,
+          message  = "Transaction does not balance (off by " .. table.concat(offby, ", ") .. ")",
           source   = "ledger",
         })
       end
@@ -155,7 +179,7 @@ function M.update(bufnr)
     ::continue::
   end
 
-  vim.diagnostic.set(diag_ns, bufnr, diagnostics, {})
+  vim.diagnostic.set(diag_ns, bufnr, diagnostics, { virtual_text = true })
 end
 
 return M
